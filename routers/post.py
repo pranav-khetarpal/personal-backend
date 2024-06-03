@@ -1,6 +1,6 @@
 from datetime import datetime
 import pytz
-from fastapi import HTTPException, APIRouter, Depends, Query, status
+from fastapi import HTTPException, APIRouter, Depends, Query, status, Request
 from models.create_post_model import CreatePostModel
 from routers.user import get_current_user_id
 
@@ -125,6 +125,7 @@ async def get_posts(user_id: str = Depends(get_current_user_id),
     """
     Method to return posts for the current user's following list with pagination
     """
+    print("Request received at /posts/fetch")  # Add this line
     try:
         # Fetch the current user's data
         user_ref = db.collection('users').document(user_id)

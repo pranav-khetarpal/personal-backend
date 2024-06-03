@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Header, Path, Query
 from firebase_admin import auth
-
+import re
 from firebase_configuration import db
 from models.create_user_model import CreateUserModel
 from models.follow_request_model import FollowRequest
@@ -28,7 +28,18 @@ def get_current_user_id(authorization: str = Header(...)) -> str:
     Helper function to get current user ID from token
     """
     try:
-        token = authorization.split(" ")[1]
+        print()
+        print("get_current_user_id token: ")
+        print(authorization)
+        print()
+
+        # token = authorization.split(" ")[1]
+
+        # # makes sure to get rid of all new line characters
+        # token = authorization.split(" ")[1].replace('\n', '').strip()
+
+        # make sure to get rid of all space creating characters
+        token = re.sub(r'\s', '', authorization.split(" ")[1]).strip()
         
         # decodes the token and verifies it
         decoded_token = auth.verify_id_token(token)
@@ -38,27 +49,62 @@ def get_current_user_id(authorization: str = Header(...)) -> str:
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid token")
     
+# # Route to create a new user document
+# @user_router.post("/user/create", response_model=UserModel)
+# async def create_user(
+#     user: CreateUserModel, 
+#     authorization: str = Header(...), 
+# ) -> UserModel:
+#     """
+#     Endpoint to create a new user
+#     """
+#     try:
+#         token = authorization.split(" ")[1]
+
+#         # Extract user ID from the token using the get_current_user_id helper function
+#         user_id_from_token = get_current_user_id(token)
+
+#         # Log extracted user ID
+#         print(f'Extracted user ID from token: {user_id_from_token}')
+
+#         # Construct the user data
+#         user_data = {
+#             'id': user_id_from_token,  # Use the user ID from the token
+#             'name': user.name,
+#             'username': user.username,
+#             'following': []  # Assuming you have a field for 'following'
+#         }
+
+#         # Log user data before saving
+#         print(f'User data to be saved: {user_data}')
+
+#         # Save the user data to the database
+#         db.collection('users').document(user_id_from_token).set(user_data)
+
+#         # Return the newly created user data
+#         return UserModel(**user_data)
+
+#     except Exception as e:
+#         # Handle any unexpected errors
+#         print(f'Error occurred while creating user: {e}')
+#         raise HTTPException(status_code=500, detail="Failed to create user: {}".format(str(e)))
+
 # Route to create a new user document
 @user_router.post("/user/create", response_model=UserModel)
 async def create_user(
     user: CreateUserModel, 
-    authorization: str = Header(...), 
+    user_id: str = Depends(get_current_user_id), 
 ) -> UserModel:
     """
     Endpoint to create a new user
     """
     try:
-        token = authorization.split(" ")[1]
-
-        # Extract user ID from the token using the get_current_user_id helper function
-        user_id_from_token = get_current_user_id(token)
-
         # Log extracted user ID
-        print(f'Extracted user ID from token: {user_id_from_token}')
+        print(f'Extracted user ID from token: {user_id}')
 
         # Construct the user data
         user_data = {
-            'id': user_id_from_token,  # Use the user ID from the token
+            'id': user_id,  # Use the user ID from the token
             'name': user.name,
             'username': user.username,
             'following': []  # Assuming you have a field for 'following'
@@ -68,7 +114,7 @@ async def create_user(
         print(f'User data to be saved: {user_data}')
 
         # Save the user data to the database
-        db.collection('users').document(user_id_from_token).set(user_data)
+        db.collection('users').document(user_id).set(user_data)
 
         # Return the newly created user data
         return UserModel(**user_data)
@@ -77,6 +123,30 @@ async def create_user(
         # Handle any unexpected errors
         print(f'Error occurred while creating user: {e}')
         raise HTTPException(status_code=500, detail="Failed to create user: {}".format(str(e)))
+    
+# Route to get the profile of the current logged-in user
+@user_router.get("/user/current", response_model=UserModel)
+async def get_current_user(user_id: str = Depends(get_current_user_id)) -> UserModel:
+    """
+    Method to get the current user's information.
+    This method MUST COME BEFORE the /user/{userID} endpoint because ORDER MATTERS with python endpoints
+    """
+
+    # get the document corresponding to the giver user ID from the database
+    user_ref = db.collection('users').document(user_id)
+    user_doc = user_ref.get()
+    
+    if user_doc.exists:
+        # convert the document to a dictionary, then return the UserModel object with the data
+        user_data = user_doc.to_dict()
+        return UserModel(
+            id=user_data['id'],
+            name=user_data['name'],
+            username=user_data['username'],
+            following=user_data['following']
+        )
+    else:
+        raise HTTPException(status_code=404, detail="User not found")
 
 # Route to get the profile of another user by user ID
 # This registers the function get_user_profile as the handler for GET requests to "/user/{userID}"
@@ -108,28 +178,6 @@ async def get_user_profile(userID: str = Path(..., description="The ID of the us
         )
     else:
         # If the user does not exist, raise an HTTP 404 error
-        raise HTTPException(status_code=404, detail="User not found")
-
-# Route to get the profile of the current logged-in user
-@user_router.get("/user/current", response_model=UserModel)
-async def get_current_user(user_id: str = Depends(get_current_user_id)) -> UserModel:
-    """
-    Method to get the current user's information.
-    """
-    # get the document corresponding to the giver user ID from the database
-    user_ref = db.collection('users').document(user_id)
-    user_doc = user_ref.get()
-    
-    if user_doc.exists:
-        # convert the document to a dictionary, then return the UserModel object with the data
-        user_data = user_doc.to_dict()
-        return UserModel(
-            id=user_data['id'],
-            name=user_data['name'],
-            username=user_data['username'],
-            following=user_data['following']
-        )
-    else:
         raise HTTPException(status_code=404, detail="User not found")
 
 # Route to add another person to the user's following list
@@ -204,3 +252,18 @@ async def search_users(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@user_router.post("/user/logout")
+async def logout_user(authorization: str = Header(...)):
+    """
+    Endpoint to logout a user, making sure to revoke any existing tokens
+    """
+    try:
+        # Extract the token from the authorization header
+        token = authorization.split(" ")[1]
+
+        # Revoke the Firebase token
+        await auth.revoke_refresh_tokens(token)
+        return {"message": "User successfully logged out"}
+    except Exception as e:
+        return {"error": f"Failed to logout user: {str(e)}"}
