@@ -10,36 +10,35 @@ from models.user_model import UserModel
 # Create a router for the user information related requests
 user_router = APIRouter()
 
-# def get_current_user_id(token: str = Header(...)) -> str:
-#     """
-#     Helper function to get current user ID from token
-#     """
-#     try:
-#         # decodes the token and verifies it
-#         decoded_token = auth.verify_id_token(token)
-
-#         # Returns the user ID (uid) if the token is valid
-#         return decoded_token['uid']
-#     except Exception as e:
-#         raise HTTPException(status_code=401, detail="Invalid token")
-
 def get_current_user_id(authorization: str = Header(...)) -> str:
     """
     Helper function to get current user ID from token
     """
     try:
-        print()
-        print("get_current_user_id token: ")
-        print(authorization)
-        print()
+
+        # print()
+        # print("get_current_user_id token: ")
+        # print(authorization)
+        # print()
 
         # token = authorization.split(" ")[1]
 
         # # makes sure to get rid of all new line characters
         # token = authorization.split(" ")[1].replace('\n', '').strip()
 
-        # make sure to get rid of all space creating characters
-        token = re.sub(r'\s', '', authorization.split(" ")[1]).strip()
+        # # make sure to get rid of all space creating characters
+        # token = re.sub(r'\s', '', authorization.split(" ")[1]).strip()
+
+        # Remove all whitespace characters
+        cleaned_authorization = re.sub(r'\s+', '', authorization)
+
+        # Extract the token part, excluding "Bearer"
+        token = re.sub(r'Bearer', '', cleaned_authorization)
+
+        # print()
+        # print("get_current_user_id token: ")
+        # print(token)
+        # print()
         
         # decodes the token and verifies it
         decoded_token = auth.verify_id_token(token)
@@ -48,48 +47,7 @@ def get_current_user_id(authorization: str = Header(...)) -> str:
         return decoded_token['uid']
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid token")
-    
-# # Route to create a new user document
-# @user_router.post("/user/create", response_model=UserModel)
-# async def create_user(
-#     user: CreateUserModel, 
-#     authorization: str = Header(...), 
-# ) -> UserModel:
-#     """
-#     Endpoint to create a new user
-#     """
-#     try:
-#         token = authorization.split(" ")[1]
 
-#         # Extract user ID from the token using the get_current_user_id helper function
-#         user_id_from_token = get_current_user_id(token)
-
-#         # Log extracted user ID
-#         print(f'Extracted user ID from token: {user_id_from_token}')
-
-#         # Construct the user data
-#         user_data = {
-#             'id': user_id_from_token,  # Use the user ID from the token
-#             'name': user.name,
-#             'username': user.username,
-#             'following': []  # Assuming you have a field for 'following'
-#         }
-
-#         # Log user data before saving
-#         print(f'User data to be saved: {user_data}')
-
-#         # Save the user data to the database
-#         db.collection('users').document(user_id_from_token).set(user_data)
-
-#         # Return the newly created user data
-#         return UserModel(**user_data)
-
-#     except Exception as e:
-#         # Handle any unexpected errors
-#         print(f'Error occurred while creating user: {e}')
-#         raise HTTPException(status_code=500, detail="Failed to create user: {}".format(str(e)))
-
-# Route to create a new user document
 @user_router.post("/user/create", response_model=UserModel)
 async def create_user(
     user: CreateUserModel, 
@@ -253,17 +211,32 @@ async def search_users(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@user_router.post("/user/logout")
-async def logout_user(authorization: str = Header(...)):
+@user_router.delete("/user/delete")
+async def delete_user(user_id: str = Depends(get_current_user_id)):
     """
-    Endpoint to logout a user, making sure to revoke any existing tokens
+    Endpoint to delete a user and all of their content on the app
     """
     try:
-        # Extract the token from the authorization header
-        token = authorization.split(" ")[1]
+        print(user_id)
+        # Retrieve the user from the Firestore users collection
+        user_ref = db.collection('users').document(user_id)
+        user_doc = user_ref.get()
 
-        # Revoke the Firebase token
-        await auth.revoke_refresh_tokens(token)
-        return {"message": "User successfully logged out"}
+        if not user_doc.exists:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        # Delete user's posts from the Firestore posts collection
+        posts_ref = db.collection('posts').where('userId', '==', user_id)
+        posts = posts_ref.stream()
+
+        for post in posts:
+            post.reference.delete()
+
+        # Delete the user from the Firestore users collection
+        user_ref.delete()
+
+        return {"message": "User and associated data deleted successfully"}
+
     except Exception as e:
-        return {"error": f"Failed to logout user: {str(e)}"}
+        print(f"Error deleting user: {e}")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
