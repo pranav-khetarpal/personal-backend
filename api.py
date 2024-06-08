@@ -1,7 +1,8 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from firebase_configuration import initialize_firebase
-from routers.user import user_router
+from routers.user_interactions import user_interactions_router
+from routers.user_account import user_account_router
 from routers.post import post_router
 from routers.stock import stock_router
 
@@ -31,6 +32,7 @@ app.add_middleware(
 )
 
 # Include routers, which allow us to modularize our code among different files
-app.include_router(user_router)
+app.include_router(user_interactions_router)
+app.include_router(user_account_router)
 app.include_router(post_router)
 app.include_router(stock_router)

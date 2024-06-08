@@ -2,7 +2,7 @@ from datetime import datetime
 import pytz
 from fastapi import HTTPException, APIRouter, Depends, Query, status, Request
 from models.create_post_model import CreatePostModel
-from routers.user import get_current_user_id
+from routers.user_interactions import get_current_user_id
 
 from firebase_configuration import db
 from firebase_admin import firestore
@@ -93,51 +93,6 @@ async def get_posts(user_id: str = Depends(get_current_user_id),
         print(f"An error occurred: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
-
-# @post_router.get("/posts/user", response_model=List[PostModel])
-# async def get_user_posts(user_id: str = Depends(get_current_user_id),
-#                          limit: int = Query(10, description="Limit the number of posts returned"), 
-#                          start_after: Optional[str] = Query(None, description="Start after this post ID")) -> List[PostModel]:
-#     """
-#     Method to return posts for a specific user with pagination
-#     """
-#     print("Request received at /posts/user")  # Add this line
-#     try:
-#         # Fetch the specified user's data
-#         user_ref = db.collection('users').document(user_id)
-#         user_doc = user_ref.get()
-
-#         # Handle the case that the user does not exist
-#         if not user_doc.exists:
-#             raise HTTPException(status_code=404, detail="User not found")
-
-#         # Fetch posts for the specified user with pagination
-#         posts_query = db.collection('posts').where('userId', '==', user_id).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(limit)
-
-#         # If start_after is provided, add it to the query
-#         if start_after:
-#             start_after_doc = db.collection('posts').document(start_after).get()
-#             if start_after_doc.exists:
-#                 posts_query = posts_query.start_after(start_after_doc)
-#             else:
-#                 raise HTTPException(status_code=404, detail="Start after post not found")
-
-#         posts_docs = posts_query.stream()
-#         posts = []
-
-#         # Convert each post document to a PostModel object and add it to the list of posts
-#         for post in posts_docs:
-#             post_data = post.to_dict()
-#             posts.append(PostModel(id=post_data['id'], 
-#                                    userId=post_data['userId'], 
-#                                    content=post_data['content'], 
-#                                    timestamp=post_data['timestamp']))
-#         return posts
-
-#     except Exception as e:
-#         # Handle any unexpected errors and return an appropriate response
-#         print(f"An error occurred: {e}")
-#         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @post_router.get("/posts/user", response_model=List[PostModel])
 async def get_user_posts(

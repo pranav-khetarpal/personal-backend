@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from typing import List
 import yfinance as yf
 
@@ -74,6 +74,22 @@ async def get_stock_info(ticker: str):
             "price": info.get('currentPrice') or info.get('previousClose') or info.get('lastClose', 0.0)
         }
         return required_info
+    except Exception as e:
+        raise HTTPException(status_code=404, detail=f"Stock data not found: {e}")
+
+
+@stock_router.get("/stock/prices")
+async def get_stock_prices(tickers: List[str] = Query(...)):
+    try:
+        prices = {}
+        for ticker in tickers:
+            # Fetch stock info using yfinance
+            stock_ticker = yf.Ticker(ticker)
+            info = stock_ticker.info
+            # print(f'yfinance.Ticker object <{ticker}>')
+            # print(info)
+            prices[ticker] = info.get('currentPrice') or info.get('previousClose') or info.get('lastClose', 0.0)
+        return prices
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Stock data not found: {e}")
     
