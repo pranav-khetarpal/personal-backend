@@ -3,9 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Path, Query
 from firebase_admin import auth
 import re
 from firebase_configuration import db
-from models.create_user_model import CreateUserModel
-from models.follow_request_model import FollowRequest
-from models.user_model import UserModel
+from models.following_models import FollowRequest, UnfollowRequest
+from models.user_models import UserModel, CreateUserModel
 
 # Create a router for the user interactiona related requests
 user_interactions_router = APIRouter()
@@ -165,6 +164,34 @@ async def follow_user(follow_request: FollowRequest, user_id: str = Depends(get_
     user_ref.update({'following': following})
 
     return {"message": "User followed successfully"}
+
+
+@user_interactions_router.post("/user/unfollow")
+async def unfollow_user(unfollow_request: UnfollowRequest, user_id: str = Depends(get_current_user_id)):
+    """
+    Remove the specified user ID from the current user's following list.
+    """
+    # Get the current user's document reference
+    user_ref = db.collection('users').document(user_id)
+    user_doc = user_ref.get()
+
+    # Handle the case that the user document does not exist
+    if not user_doc.exists:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Get the current user's data
+    user_data = user_doc.to_dict()
+    following = user_data.get('following', [])
+
+    # Check if the user is not following the target user
+    if unfollow_request.userIdToUnfollow not in following:
+        raise HTTPException(status_code=400, detail="Not following this user")
+
+    # Remove the target user ID from the following list
+    following.remove(unfollow_request.userIdToUnfollow)
+    user_ref.update({'following': following})
+
+    return {"message": "User unfollowed successfully"}
 
 
 # Endpoint to search users by username

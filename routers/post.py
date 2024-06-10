@@ -1,12 +1,11 @@
 from datetime import datetime
 import pytz
 from fastapi import HTTPException, APIRouter, Depends, Query, status, Request
-from models.create_post_model import CreatePostModel
 from routers.user_interactions import get_current_user_id
 
 from firebase_configuration import db
 from firebase_admin import firestore
-from models.post_model import PostModel
+from models.post_models import PostModel, CreatePostModel
 from typing import List, Optional
 
 # Create a router for the post related requests
