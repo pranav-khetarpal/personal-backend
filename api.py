@@ -5,6 +5,7 @@ from routers.user_interactions import user_interactions_router
 from routers.user_account import user_account_router
 from routers.post import post_router
 from routers.stock import stock_router
+from routers.image import profile_image_router
 
 #
 # This is a class to simply create our app instance and add the routers to it
@@ -36,3 +37,4 @@ app.include_router(user_interactions_router)
 app.include_router(user_account_router)
 app.include_router(post_router)
 app.include_router(stock_router)
+app.include_router(profile_image_router)
