@@ -4,21 +4,8 @@ import yfinance as yf
 
 from models.stock_model import StockModel
 
+# Create a router for the stock related requests
 stock_router = APIRouter()
-
-# @stock_router.get("/search/stocks", response_model=List[StockModel])
-# async def search_stock(ticker: str):
-#     try:
-#         stock_ticker = yf.Ticker(ticker)
-#         info = stock_ticker.info
-#         stock = StockModel(
-#             symbol=info.get('symbol', 'N/A'),
-#             name=info.get('shortName', 'N/A'),
-#             price=info.get('regularMarketPrice', 0.0)
-#         )
-#         return [stock]
-#     except Exception as e:
-#         raise HTTPException(status_code=404, detail=f"Stock not found: {e}")
 
 @stock_router.get("/search/stocks", response_model=List[StockModel])
 async def search_stock(ticker: str):

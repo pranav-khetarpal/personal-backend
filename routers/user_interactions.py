@@ -6,7 +6,7 @@ from firebase_configuration import db
 from models.following_models import FollowRequest, UnfollowRequest
 from models.user_models import UserModel, CreateUserModel
 
-# Create a router for the user interactiona related requests
+# Create a router for the user interactions related requests
 user_interactions_router = APIRouter()
 
 def get_current_user_id(authorization: str = Header(...)) -> str:
@@ -15,29 +15,11 @@ def get_current_user_id(authorization: str = Header(...)) -> str:
     """
     try:
 
-        # print()
-        # print("get_current_user_id token: ")
-        # print(authorization)
-        # print()
-
-        # token = authorization.split(" ")[1]
-
-        # # makes sure to get rid of all new line characters
-        # token = authorization.split(" ")[1].replace('\n', '').strip()
-
-        # # make sure to get rid of all space creating characters
-        # token = re.sub(r'\s', '', authorization.split(" ")[1]).strip()
-
         # Remove all whitespace characters
         cleaned_authorization = re.sub(r'\s+', '', authorization)
 
         # Extract the token part, excluding "Bearer"
         token = re.sub(r'Bearer', '', cleaned_authorization)
-
-        # print()
-        # print("get_current_user_id token: ")
-        # print(token)
-        # print()
         
         # decodes the token and verifies it
         decoded_token = auth.verify_id_token(token)

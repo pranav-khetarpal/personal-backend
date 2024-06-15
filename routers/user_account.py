@@ -8,39 +8,6 @@ from routers.user_interactions import get_current_user_id
 # Create a router for the user account related requests
 user_account_router = APIRouter()
 
-# @user_account_router.post("/user/create", response_model=UserModel)
-# async def create_user(
-#     user: CreateUserModel, 
-#     user_id: str = Depends(get_current_user_id), 
-# ) -> UserModel:
-#     """
-#     Endpoint to create a new user
-#     """
-#     try:
-#         # Log extracted user ID
-#         print(f'Extracted user ID from token: {user_id}')
-
-#         # Construct the user data
-#         user_data = {
-#             'id': user_id,  # Use the user ID from the token
-#             'name': user.name,
-#             'username': user.username,
-#             'following': []  # Assuming you have a field for 'following'
-#         }
-
-#         # Log user data before saving
-#         print(f'User data to be saved: {user_data}')
-
-#         # Save the user data to the database
-#         db.collection('users').document(user_id).set(user_data)
-
-#         # Return the newly created user data
-#         return UserModel(**user_data)
-
-#     except Exception as e:
-#         # Handle any unexpected errors
-#         print(f'Error occurred while creating user: {e}')
-#         raise HTTPException(status_code=500, detail="Failed to create user: {}".format(str(e)))
 
 @user_account_router.post("/user/create", response_model=UserModel)
 async def create_user(
@@ -91,40 +58,6 @@ async def username_availability(
         print(f'Error occurred while checking username availability: {e}')
         raise HTTPException(status_code=500, detail="Failed to check username availability: {}".format(str(e)))
 
-
-# @user_account_router.put("/user/update", response_model=UserModel)
-# async def update_user(
-#     user: UpdateUserModel, 
-#     user_id: str = Depends(get_current_user_id), 
-# ) -> UserModel:
-#     """
-#     Endpoint to update an existing user
-#     """
-#     try:
-#         # # Log extracted user ID
-#         # print(f'Extracted user ID from token: {user_id}')
-
-#         # Reference to the user document
-#         user_ref = db.collection('users').document(user_id)
-
-#         # Update the user data
-#         user_data = user.dict()
-
-#         # # Log user data before updating
-#         # print(f'User data to be updated: {user_data}')
-
-#         user_ref.update(user_data)
-
-#         # Fetch the updated user data
-#         updated_user = user_ref.get().to_dict()
-        
-#         # Return the updated user data
-#         return UserModel(**updated_user)
-
-#     except Exception as e:
-#         # Handle any unexpected errors
-#         print(f'Error occurred while updating user: {e}')
-#         raise HTTPException(status_code=500, detail="Failed to update user: {}".format(str(e)))
 
 @user_account_router.put("/user/update", response_model=UserModel)
 async def update_user(

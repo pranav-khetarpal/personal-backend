@@ -1,3 +1,4 @@
+from typing import Optional
 from pydantic import BaseModel 
 from datetime import datetime 
 
@@ -7,6 +8,8 @@ class PostModel(BaseModel):
     userId: str
     content: str
     timestamp: datetime
+    likes_count: int
+    isLikedByUser: Optional[bool] = False
 
 # New model for post creation that only requires the content field
 # This ensures that the ID and timestamp are generated server-side
