@@ -1,8 +1,9 @@
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List
 import yfinance as yf
-
-from models.stock_model import StockModel
+from models.stock_models import StockListCreateRequest, StockListUpdateRequest, StockModel
+from routers.user_interactions import get_current_user_id
+from firebase_configuration import db
 
 # Create a router for the stock related requests
 stock_router = APIRouter()
@@ -37,8 +38,12 @@ async def search_stock(ticker: str):
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Stock not found: {e}")
 
+
 @stock_router.get("/stock/info/{ticker}")
 async def get_stock_info(ticker: str):
+    """
+    Endpoint to return detailed stock information for a given ticker
+    """
     try:
         # Fetch stock info using yfinance
         stock_ticker = yf.Ticker(ticker)
@@ -67,6 +72,9 @@ async def get_stock_info(ticker: str):
 
 @stock_router.get("/stock/prices")
 async def get_stock_prices(tickers: List[str] = Query(...)):
+    """
+    Endpoint to return the prices of a given list of stock tickers
+    """
     try:
         prices = {}
         for ticker in tickers:
@@ -79,4 +87,79 @@ async def get_stock_prices(tickers: List[str] = Query(...)):
         return prices
     except Exception as e:
         raise HTTPException(status_code=404, detail=f"Stock data not found: {e}")
-    
+
+
+
+
+
+
+@stock_router.delete("/stock/stockLists/delete/{list_name}", status_code=204)
+async def delete_stock_list(list_name: str, user_id: str = Depends(get_current_user_id)):
+    """
+    Endpoint to delete a stock list from a user's document
+    """
+    try:
+        print(list_name)
+        # Reference to the user's stockLists subcollection
+        stocklists_ref = db.collection('users').document(user_id).collection('stockLists')
+
+        # Query to find the stock list document with the specified name
+        query = stocklists_ref.where('name', '==', list_name).stream()
+
+        # Iterate over the query results and delete the matching document
+        for doc in query:
+            doc.reference.delete()
+
+        return
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@stock_router.put("/stock/stockLists/update/{list_name}")
+async def update_stock_list(list_name: str, request: StockListUpdateRequest, user_id: str = Depends(get_current_user_id)):
+    """
+    Endpoint to update a stock list for a user
+    """
+    try:
+        # Reference to the user's stockLists subcollection
+        stocklists_ref = db.collection('users').document(user_id).collection('stockLists')
+
+        # Query to find the stock list document with the specified name
+        query = stocklists_ref.where('name', '==', list_name).stream()
+
+        # Update the first matching document with new data
+        for doc in query:
+            doc.reference.update({
+                'name': request.name,
+                'tickers': request.tickers,
+            })
+
+        return
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+
+@stock_router.post("/stock/stockLists/create")
+async def create_stock_list(request: StockListCreateRequest, user_id: str = Depends(get_current_user_id)):
+    """
+    Endpoint to create a new stock list for a user
+    """
+    try:
+        # Reference to the user's stockLists subcollection
+        stocklists_ref = db.collection('users').document(user_id).collection('stockLists')
+
+        # Add new stock list document
+        stocklists_ref.add({
+            'name': request.name,
+            'tickers': request.tickers,
+        })
+
+        return {"message": "Stock list created successfully"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+

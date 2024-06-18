@@ -9,27 +9,70 @@ from routers.user_interactions import get_current_user_id
 user_account_router = APIRouter()
 
 
+# @user_account_router.post("/user/create", response_model=UserModel)
+# async def create_user(
+#     user: CreateUserModel, 
+#     user_id: str = Depends(get_current_user_id), 
+# ) -> UserModel:
+#     try:
+#         # Log extracted user ID
+#         print(f'Extracted user ID from token: {user_id}')
+
+#         # Construct the user data
+#         user_data = user.model_dump()
+#         user_data.update({
+#             'id': user_id,
+#             'following': [user_id] # add the current user's own ID to their following list
+#         })
+        
+#         # Log user data before saving
+#         print(f'User data to be saved: {user_data}')
+
+#         # Save the user data to the database
+#         db.collection('users').document(user_id).set(user_data)
+
+#         # Return the newly created user data
+#         return UserModel(**user_data)
+
+#     except Exception as e:
+#         # Handle any unexpected errors
+#         print(f'Error occurred while creating user: {e}')
+#         raise HTTPException(status_code=500, detail="Failed to create user: {}".format(str(e)))
+
+
 @user_account_router.post("/user/create", response_model=UserModel)
 async def create_user(
     user: CreateUserModel, 
-    user_id: str = Depends(get_current_user_id), 
+    user_id: str = Depends(get_current_user_id)
 ) -> UserModel:
+    """
+    Endpoint to create a new user document in the firestore users collection
+    """
     try:
         # Log extracted user ID
         print(f'Extracted user ID from token: {user_id}')
 
         # Construct the user data
-        user_data = user.model_dump()
+        user_data = user.dict()
         user_data.update({
             'id': user_id,
-            'following': [user_id] # add the current user's own ID to their following list
+            'following': [user_id], # add the current user's own ID to their following list
+            'stockLists': {}  # Initialize stockLists as an empty dictionary
         })
         
         # Log user data before saving
         print(f'User data to be saved: {user_data}')
 
         # Save the user data to the database
-        db.collection('users').document(user_id).set(user_data)
+        user_ref = db.collection('users').document(user_id)
+        user_ref.set(user_data)
+
+        # Initialize the stockLists subcollection with the default list
+        default_stock_list = {
+            'name': 'First List',
+            'tickers': ["AAPL", "MSFT", "TSLA", "AMZN", "NVDA"]
+        }
+        user_ref.collection('stockLists').add(default_stock_list)
 
         # Return the newly created user data
         return UserModel(**user_data)
@@ -38,7 +81,6 @@ async def create_user(
         # Handle any unexpected errors
         print(f'Error occurred while creating user: {e}')
         raise HTTPException(status_code=500, detail="Failed to create user: {}".format(str(e)))
-
 
 @user_account_router.post("/user/usernameAvailability")
 async def username_availability(

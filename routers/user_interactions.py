@@ -30,21 +30,54 @@ def get_current_user_id(authorization: str = Header(...)) -> str:
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+# @user_interactions_router.get("/user/current", response_model=UserModel)
+# async def get_current_user(user_id: str = Depends(get_current_user_id)) -> UserModel:
+#     """
+#     Endpoint to retrive the profile information of the current user.
+
+#     This method MUST COME BEFORE the /user/{userID} endpoint because ORDER MATTERS with python endpoints
+#     """
+
+#     # get the document corresponding to the giver user ID from the database
+#     user_ref = db.collection('users').document(user_id)
+#     user_doc = user_ref.get()
+    
+#     if user_doc.exists:
+#         # convert the document to a dictionary, then return the UserModel object with the data
+#         user_data = user_doc.to_dict()
+#         return UserModel(**user_data)
+#     else:
+#         raise HTTPException(status_code=404, detail="User not found")
+
+
 @user_interactions_router.get("/user/current", response_model=UserModel)
 async def get_current_user(user_id: str = Depends(get_current_user_id)) -> UserModel:
     """
-    Endpoint to retrive the profile information of the current user.
-
-    This method MUST COME BEFORE the /user/{userID} endpoint because ORDER MATTERS with python endpoints
+    Endpoint to retrieve the profile information of the current user.
     """
-
-    # get the document corresponding to the giver user ID from the database
     user_ref = db.collection('users').document(user_id)
     user_doc = user_ref.get()
     
     if user_doc.exists:
-        # convert the document to a dictionary, then return the UserModel object with the data
         user_data = user_doc.to_dict()
+
+        # Initialize stockLists dictionary
+        stockLists = {}
+
+        # Fetch stock lists from the subcollection
+        stock_lists_ref = user_ref.collection('stockLists')
+        stock_lists_docs = stock_lists_ref.stream()
+
+        for doc in stock_lists_docs:
+            stock_list_data = doc.to_dict()
+            list_name = stock_list_data.get('name')
+            tickers = stock_list_data.get('tickers', [])
+            if list_name:
+                stockLists[list_name] = tickers
+
+        # Add stockLists to user_data
+        user_data['stockLists'] = stockLists
+
         return UserModel(**user_data)
     else:
         raise HTTPException(status_code=404, detail="User not found")
@@ -164,6 +197,10 @@ async def search_users(
         users = []
         for doc in docs:
             user_data = doc.to_dict()
+            
+            # Remove 'stockLists' if it is not needed
+            user_data.pop('stockLists', None)
+
             user = UserModel(**user_data)
             users.append(user)
 
