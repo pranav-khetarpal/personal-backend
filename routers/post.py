@@ -2,13 +2,12 @@ from datetime import datetime
 import pytz
 from fastapi import HTTPException, APIRouter, Depends, Query, status
 from routers.user_interactions import get_current_user_id
-
 from firebase_configuration import db
 from firebase_admin import firestore
 from models.post_models import PostModel, CreatePostModel
 from typing import List, Optional
 
-# Create a router for the post related requests
+# Create a router for the post-related requests
 post_router = APIRouter()
 
 @post_router.post("/posts/create", response_model=PostModel)
@@ -23,7 +22,7 @@ async def create_post(post: CreatePostModel, user_id: str = Depends(get_current_
         'content': post.content,
         'timestamp': datetime.now(pytz.UTC),  # Ensure UTC timezone is used
         'likes_count': 1,  # Initialize the likes count to 1
-        'isLikedByUser': True # the current user likes their post
+        'comments_count': 0,  # Initialize the comments count to 0
     }
 
     try:
@@ -39,8 +38,10 @@ async def create_post(post: CreatePostModel, user_id: str = Depends(get_current_
             status_code=500,
             detail=f"Failed to create post: {e}",
         )
+    
+    # return a post model, while ensuring that the current user likes their own post
+    return PostModel(**post_data, isLikedByUser=True)
 
-    return PostModel(**post_data)
 
 @post_router.delete("/posts/delete/{post_id}", status_code=status.HTTP_200_OK)
 async def delete_post(post_id: str, user_id: str = Depends(get_current_user_id)):
@@ -65,15 +66,56 @@ async def delete_post(post_id: str, user_id: str = Depends(get_current_user_id))
         )
 
     try:
-        # Delete the post from Firestore
-        post_ref.delete()
+        # Start a Firestore batch
+        batch = db.batch()
+
+        # Delete post's likes and remove from users' likedPosts subcollections
+        likes_ref = post_ref.collection('likes')
+        likes = likes_ref.stream()
+        for like in likes:
+            user_ref = db.collection('users').document(like.id)
+            liked_post_ref = user_ref.collection('likedPosts').document(post_id)
+            batch.delete(liked_post_ref)
+            batch.delete(like.reference)
+
+        # Delete post's comments and their likes, and remove from users' commentedPosts subcollections
+        comments_ref = post_ref.collection('comments')
+        comments = comments_ref.stream()
+        for comment in comments:
+            comment_ref = comment.reference
+            comment_data = comment.to_dict()
+
+            # Delete comment's likes and remove from users' likedComments subcollections
+            comment_likes_ref = comment_ref.collection('likes')
+            comment_likes = comment_likes_ref.stream()
+            for comment_like in comment_likes:
+                user_ref = db.collection('users').document(comment_like.id)
+                liked_comment_ref = user_ref.collection('likedComments').document(comment_ref.id)
+                batch.delete(liked_comment_ref)
+                batch.delete(comment_like.reference)
+
+            # Remove the post from the user's commentedPosts subcollection
+            user_ref = db.collection('users').document(comment_data['userId'])
+            commented_post_ref = user_ref.collection('commentedPosts').document(post_id)
+            batch.delete(commented_post_ref)
+
+            # Delete the comment document
+            batch.delete(comment_ref)
+
+        # Delete the post document
+        batch.delete(post_ref)
+
+        # Commit the batch
+        batch.commit()
+
+        return {"message": "Post deleted successfully"}
+    
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to delete post: {e}",
         )
 
-    return {"message": "Post deleted successfully"}
 
 @post_router.get("/posts/fetch", response_model=List[PostModel])
 async def get_posts(user_id: str = Depends(get_current_user_id), 
@@ -120,12 +162,15 @@ async def get_posts(user_id: str = Depends(get_current_user_id),
         for post in posts_docs:
             post_data = post.to_dict()
             is_liked = db.collection('posts').document(post.id).collection('likes').document(user_id).get().exists
-            posts.append(PostModel(id=post.id, 
-                                   userId=post_data['userId'], 
-                                   content=post_data['content'], 
-                                   timestamp=post_data['timestamp'],
-                                   likes_count=post_data.get('likes_count', 0),
-                                   isLikedByUser=is_liked))
+            posts.append(PostModel(
+                id=post.id, 
+                userId=post_data['userId'], 
+                content=post_data['content'], 
+                timestamp=post_data['timestamp'],
+                likes_count=post_data.get('likes_count', 0),
+                comments_count=post_data.get('comments_count', 0),  # Add comments_count
+                isLikedByUser=is_liked
+            ))
         return posts
 
     except Exception as e:
@@ -171,22 +216,21 @@ async def get_user_posts(
         for post in posts_docs:
             post_data = post.to_dict()
             is_liked = db.collection('posts').document(post.id).collection('likes').document(current_user_id).get().exists
-            posts.append(PostModel(id=post.id, 
-                                   userId=post_data['userId'], 
-                                   content=post_data['content'], 
-                                   timestamp=post_data['timestamp'],
-                                   likes_count=post_data.get('likes_count', 0),
-                                   isLikedByUser=is_liked))
+            posts.append(PostModel(
+                id=post.id, 
+                userId=post_data['userId'], 
+                content=post_data['content'], 
+                timestamp=post_data['timestamp'],
+                likes_count=post_data.get('likes_count', 0),
+                comments_count=post_data.get('comments_count', 0),  # Add comments_count
+                isLikedByUser=is_liked
+            ))
         return posts
 
     except Exception as e:
         # Handle any unexpected errors and return an appropriate response
         print(f"An error occurred: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
-
-
-
-
 
 def increment_likes(post_ref, user_id):
     """
@@ -201,13 +245,16 @@ def increment_likes(post_ref, user_id):
         # Add the like by creating a document in the likes subcollection
         likes_ref = post_ref.collection('likes').document(user_id)
         likes_ref.set({'liked_at': datetime.now()})
-        
+
+        # Add the post to the user's liked posts subcollection
+        user_liked_posts_ref = db.collection('users').document(user_id).collection('likedPosts').document(post_ref.id)
+        user_liked_posts_ref.set({'liked_at': datetime.now()})
+
         print("Likes incremented successfully")
 
     except Exception as e:
         print(f"Failed to increment likes: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to increment likes: {e}")
-
 
 @post_router.post("/posts/like/{post_id}", status_code=status.HTTP_200_OK)
 async def like_post(post_id: str, user_id: str = Depends(get_current_user_id)):
@@ -235,8 +282,6 @@ async def like_post(post_id: str, user_id: str = Depends(get_current_user_id)):
 
     return {"message": "Post liked successfully"}
 
-
-
 def decrement_likes(post_ref, user_id):
     """
     Helper function to decrement likes and delete like document
@@ -252,13 +297,16 @@ def decrement_likes(post_ref, user_id):
         # Remove the like document from the likes subcollection
         likes_ref = post_ref.collection('likes').document(user_id)
         likes_ref.delete()
+
+        # Remove the post from the user's liked posts subcollection
+        user_liked_posts_ref = db.collection('users').document(user_id).collection('likedPosts').document(post_ref.id)
+        user_liked_posts_ref.delete()
         
         print("Likes decremented successfully")
 
     except Exception as e:
         print(f"Failed to decrement likes: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to decrement likes: {e}")
-    
 
 @post_router.post("/posts/unlike/{post_id}", status_code=status.HTTP_200_OK)
 async def unlike_post(post_id: str, user_id: str = Depends(get_current_user_id)):

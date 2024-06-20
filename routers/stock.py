@@ -89,10 +89,6 @@ async def get_stock_prices(tickers: List[str] = Query(...)):
         raise HTTPException(status_code=404, detail=f"Stock data not found: {e}")
 
 
-
-
-
-
 @stock_router.delete("/stock/stockLists/delete/{list_name}", status_code=204)
 async def delete_stock_list(list_name: str, user_id: str = Depends(get_current_user_id)):
     """
@@ -139,8 +135,6 @@ async def update_stock_list(list_name: str, request: StockListUpdateRequest, use
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
 
 
 @stock_router.post("/stock/stockLists/create")

@@ -33,31 +33,15 @@ firebase_admin.initialize_app(cred)
 
 db = firestore.client()
 
-# Define the initial stock list
-initial_stock_list = {
-    'name': 'First List',
-    'tickers': ['AAPL', 'MSFT', 'TSLA', 'AMZN', 'NVDA']
-}
-
-# Add the stockLists subcollection to each user document and initialize with the initial stock list
-users_ref = db.collection('users')
-docs = users_ref.stream()
+# Initialize comments_count for each post document
+posts_ref = db.collection('posts')
+docs = posts_ref.stream()
 
 for doc in docs:
-    user_id = doc.id
-    user_ref = users_ref.document(user_id)
+    post_id = doc.id
+    post_ref = posts_ref.document(post_id)
 
-    # Check if stockLists subcollection already exists for the user
-    stock_lists_ref = user_ref.collection('stockLists')
-    stock_lists_docs = stock_lists_ref.stream()
+    # Update the document with the comments_count field set to 0
+    post_ref.update({'comments_count': 0})
 
-    # If there are no existing stock lists, add the initial stock list
-    if stock_lists_docs is None:
-        print(f"StockLists subcollection already exists for user {user_id}. Skipping initialization.")
-    else:
-        # Initialize stockLists subcollection with initial stock list
-        stock_list_doc_ref = stock_lists_ref.document()
-        stock_list_doc_ref.set(initial_stock_list)
-        print(f"Initialized stockLists subcollection for user {user_id} with initial stock list.")
-
-print("Initialization complete.")
+print("Migration completed: comments_count field initialized to 0 for all posts.")

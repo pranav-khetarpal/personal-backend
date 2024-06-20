@@ -9,6 +9,7 @@ class PostModel(BaseModel):
     content: str
     timestamp: datetime
     likes_count: int
+    comments_count: int  # New field for comments count
     isLikedByUser: Optional[bool] = False
 
 # New model for post creation that only requires the content field
