@@ -178,6 +178,7 @@ async def get_posts(user_id: str = Depends(get_current_user_id),
         print(f"An error occurred: {e}")
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
+
 @post_router.get("/posts/user", response_model=List[PostModel])
 async def get_user_posts(
     user_id: str = Query(..., description="ID of the user whose posts to fetch"),
