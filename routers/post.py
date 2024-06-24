@@ -117,35 +117,146 @@ async def delete_post(post_id: str, user_id: str = Depends(get_current_user_id))
         )
 
 
+# @post_router.get("/posts/fetch", response_model=List[PostModel])
+# async def get_posts(user_id: str = Depends(get_current_user_id), 
+#                     limit: int = Query(10, description="Limit the number of posts returned"), 
+#                     start_after: Optional[str] = Query(None, description="Start after this post ID")) -> List[PostModel]:
+#     """
+#     Method to return posts for the current user's following list with pagination
+#     """
+#     print("Request received at /posts/fetch")
+#     try:
+#         # Fetch the current user's data
+#         user_ref = db.collection('users').document(user_id)
+#         user_doc = user_ref.get()
+
+#         # Handle the case that no user data exists
+#         if not user_doc.exists:
+#             raise HTTPException(status_code=404, detail="User not found")
+
+#         # Convert the user's document to a dictionary
+#         user_data = user_doc.to_dict()
+
+#         # Retrieve the list of users that the current user is following
+#         following = user_data.get('following', [])
+
+#         # Check if following list is empty
+#         if not following:
+#             return []
+
+#         # Fetch posts from users that the current user is following with pagination
+#         posts_query = db.collection('posts').where('userId', 'in', following).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(limit)
+
+#         # If start_after is provided, add it to the query
+#         if start_after:
+#             start_after_doc = db.collection('posts').document(start_after).get()
+#             if start_after_doc.exists:
+#                 posts_query = posts_query.start_after(start_after_doc)
+#             else:
+#                 raise HTTPException(status_code=404, detail="Start after post not found")
+
+#         posts_docs = posts_query.stream()
+#         posts = []
+
+#         # Convert each post document to a PostModel object and add it to the list of posts
+#         for post in posts_docs:
+#             post_data = post.to_dict()
+#             is_liked = db.collection('posts').document(post.id).collection('likes').document(user_id).get().exists
+#             posts.append(PostModel(
+#                 id=post.id, 
+#                 userId=post_data['userId'], 
+#                 content=post_data['content'], 
+#                 timestamp=post_data['timestamp'],
+#                 likes_count=post_data.get('likes_count', 0),
+#                 comments_count=post_data.get('comments_count', 0),  # Add comments_count
+#                 isLikedByUser=is_liked
+#             ))
+#         return posts
+
+#     except Exception as e:
+#         # Handle any unexpected errors and return an appropriate response
+#         print(f"An error occurred: {e}")
+#         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+# @post_router.get("/posts/fetch", response_model=List[PostModel])
+# async def get_posts(
+#     user_id: str = Depends(get_current_user_id),
+#     limit: int = Query(10, description="Limit the number of posts returned"),
+#     start_after: Optional[str] = Query(None, description="Start after this post ID")
+# ) -> List[PostModel]:
+#     """
+#     Method to return posts for the current user's following list with pagination
+#     """
+#     print("Request received at /posts/fetch")
+#     try:
+#         # Fetch the current user's following subcollection
+#         following_ref = db.collection('users').document(user_id).collection('following')
+#         following_docs = following_ref.stream()
+        
+#         following_ids = [doc.id for doc in following_docs]
+
+#         # Check if following list is empty
+#         if not following_ids:
+#             return []
+
+#         # Fetch posts from users that the current user is following with pagination
+#         posts_query = db.collection('posts').where('userId', 'in', following_ids).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(limit)
+
+#         # If start_after is provided, add it to the query
+#         if start_after:
+#             start_after_doc = db.collection('posts').document(start_after).get()
+#             if start_after_doc.exists:
+#                 posts_query = posts_query.start_after(start_after_doc)
+#             else:
+#                 raise HTTPException(status_code=404, detail="Start after post not found")
+
+#         posts_docs = posts_query.stream()
+#         posts = []
+
+#         # Convert each post document to a PostModel object and add it to the list of posts
+#         for post in posts_docs:
+#             post_data = post.to_dict()
+#             is_liked = db.collection('posts').document(post.id).collection('likes').document(user_id).get().exists
+#             posts.append(PostModel(
+#                 id=post.id,
+#                 userId=post_data['userId'],
+#                 content=post_data['content'],
+#                 timestamp=post_data['timestamp'],
+#                 likes_count=post_data.get('likes_count', 0),
+#                 comments_count=post_data.get('comments_count', 0),  # Add comments_count
+#                 isLikedByUser=is_liked
+#             ))
+#         return posts
+
+#     except Exception as e:
+#         # Handle any unexpected errors and return an appropriate response
+#         print(f"An error occurred: {e}")
+#         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
 @post_router.get("/posts/fetch", response_model=List[PostModel])
-async def get_posts(user_id: str = Depends(get_current_user_id), 
-                    limit: int = Query(10, description="Limit the number of posts returned"), 
-                    start_after: Optional[str] = Query(None, description="Start after this post ID")) -> List[PostModel]:
+async def get_posts(
+    user_id: str = Depends(get_current_user_id),
+    limit: int = Query(10, description="Limit the number of posts returned"),
+    start_after: Optional[str] = Query(None, description="Start after this post ID")
+) -> List[PostModel]:
     """
     Method to return posts for the current user's following list with pagination
     """
     print("Request received at /posts/fetch")
     try:
-        # Fetch the current user's data
-        user_ref = db.collection('users').document(user_id)
-        user_doc = user_ref.get()
+        # Fetch the current user's following subcollection
+        following_ref = db.collection('users').document(user_id).collection('following')
+        following_docs = following_ref.stream()
+        
+        following_ids = [doc.id for doc in following_docs]
 
-        # Handle the case that no user data exists
-        if not user_doc.exists:
-            raise HTTPException(status_code=404, detail="User not found")
-
-        # Convert the user's document to a dictionary
-        user_data = user_doc.to_dict()
-
-        # Retrieve the list of users that the current user is following
-        following = user_data.get('following', [])
-
-        # Check if following list is empty
-        if not following:
-            return []
+        # Add the current user's ID to the list of IDs to include their own posts
+        following_ids.append(user_id)
 
         # Fetch posts from users that the current user is following with pagination
-        posts_query = db.collection('posts').where('userId', 'in', following).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(limit)
+        posts_query = db.collection('posts').where('userId', 'in', following_ids).order_by('timestamp', direction=firestore.Query.DESCENDING).limit(limit)
 
         # If start_after is provided, add it to the query
         if start_after:
@@ -163,9 +274,9 @@ async def get_posts(user_id: str = Depends(get_current_user_id),
             post_data = post.to_dict()
             is_liked = db.collection('posts').document(post.id).collection('likes').document(user_id).get().exists
             posts.append(PostModel(
-                id=post.id, 
-                userId=post_data['userId'], 
-                content=post_data['content'], 
+                id=post.id,
+                userId=post_data['userId'],
+                content=post_data['content'],
                 timestamp=post_data['timestamp'],
                 likes_count=post_data.get('likes_count', 0),
                 comments_count=post_data.get('comments_count', 0),  # Add comments_count

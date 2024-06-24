@@ -1,6 +1,6 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException, Header, Path, Query
-from firebase_admin import auth
+from firebase_admin import auth, firestore
 import re
 from firebase_configuration import db
 from models.following_models import FollowRequest, UnfollowRequest
@@ -28,26 +28,6 @@ def get_current_user_id(authorization: str = Header(...)) -> str:
         return decoded_token['uid']
     except Exception as e:
         raise HTTPException(status_code=401, detail="Invalid token")
-
-
-# @user_interactions_router.get("/user/current", response_model=UserModel)
-# async def get_current_user(user_id: str = Depends(get_current_user_id)) -> UserModel:
-#     """
-#     Endpoint to retrive the profile information of the current user.
-
-#     This method MUST COME BEFORE the /user/{userID} endpoint because ORDER MATTERS with python endpoints
-#     """
-
-#     # get the document corresponding to the giver user ID from the database
-#     user_ref = db.collection('users').document(user_id)
-#     user_doc = user_ref.get()
-    
-#     if user_doc.exists:
-#         # convert the document to a dictionary, then return the UserModel object with the data
-#         user_data = user_doc.to_dict()
-#         return UserModel(**user_data)
-#     else:
-#         raise HTTPException(status_code=404, detail="User not found")
 
 
 @user_interactions_router.get("/user/current", response_model=UserModel)
@@ -110,6 +90,33 @@ async def get_user_profile(userID: str = Path(..., description="The ID of the us
         raise HTTPException(status_code=404, detail="User not found")
 
 
+# @user_interactions_router.post("/user/follow")
+# async def follow_user(follow_request: FollowRequest, user_id: str = Depends(get_current_user_id)):
+#     """
+#     Endpoint to add the specified user ID to the current user's following list.
+#     """
+#     # Get the current user's document reference
+#     user_ref = db.collection('users').document(user_id)
+#     user_doc = user_ref.get()
+
+#     # Handle the case that the user document does not exist
+#     if not user_doc.exists:
+#         raise HTTPException(status_code=404, detail="User not found")
+
+#     # Get the current user's data
+#     user_data = user_doc.to_dict()
+#     following = user_data.get('following', [])
+
+#     # Check if the user is already following the target user
+#     if follow_request.userIdToFollow in following:
+#         raise HTTPException(status_code=400, detail="Already following this user")
+
+#     # Add the target user ID to the following list
+#     following.append(follow_request.userIdToFollow)
+#     user_ref.update({'following': following})
+
+#     return {"message": "User followed successfully"}
+
 @user_interactions_router.post("/user/follow")
 async def follow_user(follow_request: FollowRequest, user_id: str = Depends(get_current_user_id)):
     """
@@ -119,24 +126,63 @@ async def follow_user(follow_request: FollowRequest, user_id: str = Depends(get_
     user_ref = db.collection('users').document(user_id)
     user_doc = user_ref.get()
 
-    # Handle the case that the user document does not exist
     if not user_doc.exists:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Get the current user's data
-    user_data = user_doc.to_dict()
-    following = user_data.get('following', [])
+    # Get the target user's document reference
+    target_user_ref = db.collection('users').document(follow_request.userIdToFollow)
+    target_user_doc = target_user_ref.get()
 
-    # Check if the user is already following the target user
-    if follow_request.userIdToFollow in following:
+    if not target_user_doc.exists:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    # Check if already following
+    following_ref = user_ref.collection('following').document(follow_request.userIdToFollow)
+    if following_ref.get().exists:
         raise HTTPException(status_code=400, detail="Already following this user")
 
-    # Add the target user ID to the following list
-    following.append(follow_request.userIdToFollow)
-    user_ref.update({'following': following})
+    # Add target user to following subcollection
+    following_ref.set({})
+
+    # Increment following count for current user
+    user_ref.update({'following_count': firestore.Increment(1)})
+
+    # Add current user to target user's followers subcollection
+    target_user_ref.collection('followers').document(user_id).set({})
+
+    # Increment followers count for target user
+    target_user_ref.update({'followers_count': firestore.Increment(1)})
 
     return {"message": "User followed successfully"}
 
+
+
+# @user_interactions_router.post("/user/unfollow")
+# async def unfollow_user(unfollow_request: UnfollowRequest, user_id: str = Depends(get_current_user_id)):
+#     """
+#     Remove the specified user ID from the current user's following list.
+#     """
+#     # Get the current user's document reference
+#     user_ref = db.collection('users').document(user_id)
+#     user_doc = user_ref.get()
+
+#     # Handle the case that the user document does not exist
+#     if not user_doc.exists:
+#         raise HTTPException(status_code=404, detail="User not found")
+
+#     # Get the current user's data
+#     user_data = user_doc.to_dict()
+#     following = user_data.get('following', [])
+
+#     # Check if the user is not following the target user
+#     if unfollow_request.userIdToUnfollow not in following:
+#         raise HTTPException(status_code=400, detail="Not following this user")
+
+#     # Remove the target user ID from the following list
+#     following.remove(unfollow_request.userIdToUnfollow)
+#     user_ref.update({'following': following})
+
+#     return {"message": "User unfollowed successfully"}
 
 @user_interactions_router.post("/user/unfollow")
 async def unfollow_user(unfollow_request: UnfollowRequest, user_id: str = Depends(get_current_user_id)):
@@ -147,26 +193,36 @@ async def unfollow_user(unfollow_request: UnfollowRequest, user_id: str = Depend
     user_ref = db.collection('users').document(user_id)
     user_doc = user_ref.get()
 
-    # Handle the case that the user document does not exist
     if not user_doc.exists:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Get the current user's data
-    user_data = user_doc.to_dict()
-    following = user_data.get('following', [])
+    # Get the target user's document reference
+    target_user_ref = db.collection('users').document(unfollow_request.userIdToUnfollow)
+    target_user_doc = target_user_ref.get()
 
-    # Check if the user is not following the target user
-    if unfollow_request.userIdToUnfollow not in following:
+    if not target_user_doc.exists:
+        raise HTTPException(status_code=404, detail="Target user not found")
+
+    # Check if not following
+    following_ref = user_ref.collection('following').document(unfollow_request.userIdToUnfollow)
+    if not following_ref.get().exists:
         raise HTTPException(status_code=400, detail="Not following this user")
 
-    # Remove the target user ID from the following list
-    following.remove(unfollow_request.userIdToUnfollow)
-    user_ref.update({'following': following})
+    # Remove target user from following subcollection
+    following_ref.delete()
+
+    # Decrement following count for current user
+    user_ref.update({'following_count': firestore.Increment(-1)})
+
+    # Remove current user from target user's followers subcollection
+    target_user_ref.collection('followers').document(user_id).delete()
+
+    # Decrement followers count for target user
+    target_user_ref.update({'followers_count': firestore.Increment(-1)})
 
     return {"message": "User unfollowed successfully"}
 
 
-# Endpoint to search users by username
 @user_interactions_router.get("/search/users", response_model=List[UserModel])
 async def search_users(
     username: str = Query(..., description="The username to search for"),
@@ -205,6 +261,23 @@ async def search_users(
             users.append(user)
 
         return users
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+
+@user_interactions_router.get("/user/is_following/{target_user_id}", response_model=bool)
+async def is_following_user(target_user_id: str, user_id: str = Depends(get_current_user_id)) -> bool:
+    """
+    Check if the current user is following the target user.
+    """
+    try:
+        # Reference to the subcollection of the current user's 'following' list
+        following_ref = db.collection('users').document(user_id).collection('following').document(target_user_id)
+        following_doc = following_ref.get()
+
+        # Return true if the document exists (current user is following target user)
+        return following_doc.exists
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

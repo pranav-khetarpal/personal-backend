@@ -1,7 +1,7 @@
 from typing import List
 from fastapi import APIRouter, Body, Depends, HTTPException, Header, Path, Query
 from firebase_configuration import db
-from firebase_admin import auth
+from firebase_admin import firestore
 from models.user_models import UpdateUserModel, UserModel, CreateUserModel
 from routers.user_interactions import get_current_user_id
 
@@ -22,11 +22,13 @@ async def create_user(
         print(f'Extracted user ID from token: {user_id}')
 
         # Construct the user data
-        user_data = user.dict()
+        user_data = user.model_dump()
         user_data.update({
             'id': user_id,
-            'following': [user_id], # add the current user's own ID to their following list
-            'stockLists': {}  # Initialize stockLists as an empty dictionary
+            # 'following': [user_id], # add the current user's own ID to their following list
+            'followers_count': 0,  # Initialize followers count
+            'following_count': 0,  # Initialize following count
+            # 'stockLists': {}  # Initialize stockLists as an empty dictionary
         })
         
         # Log user data before saving
@@ -115,6 +117,26 @@ async def delete_user(user_id: str = Depends(get_current_user_id)):
 
         if not user_doc.exists:
             raise HTTPException(status_code=404, detail="User not found")
+        
+        # Handle followers
+        followers_ref = user_ref.collection('followers')
+        followers = followers_ref.stream()
+        for follower in followers:
+            follower_ref = db.collection('users').document(follower.id).collection('following').document(user_id)
+            batch.delete(follower_ref)
+            follower_user_ref = db.collection('users').document(follower.id)
+            batch.update(follower_user_ref, {'following_count': firestore.Increment(-1)})
+            batch.delete(follower.reference)
+
+        # Handle following
+        following_ref = user_ref.collection('following')
+        following = following_ref.stream()
+        for followed_user in following:
+            followed_user_ref = db.collection('users').document(followed_user.id).collection('followers').document(user_id)
+            batch.delete(followed_user_ref)
+            target_user_ref = db.collection('users').document(followed_user.id)
+            batch.update(target_user_ref, {'followers_count': firestore.Increment(-1)})
+            batch.delete(followed_user.reference)
 
         # Delete user's posts and related data
         posts_ref = db.collection('posts').where('userId', '==', user_id)
