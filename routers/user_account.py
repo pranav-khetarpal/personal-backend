@@ -107,6 +107,7 @@ async def delete_user(user_id: str = Depends(get_current_user_id)):
     """
     Endpoint to delete a user and all of their content on the app
     """
+    
     try:
         # Start a Firestore batch
         batch = db.batch()
