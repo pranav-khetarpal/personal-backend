@@ -1,4 +1,5 @@
 from pydantic import BaseModel
+from typing import List
 
 class StockModel(BaseModel):
     symbol: str
@@ -7,8 +8,8 @@ class StockModel(BaseModel):
 
 class StockListUpdateRequest(BaseModel):
     name: str
-    tickers: list[str]
+    tickers: List[str]
 
 class StockListCreateRequest(BaseModel):
     name: str
-    tickers: list[str]
+    tickers: List[str]

@@ -97,7 +97,7 @@ async def delete_comment(post_id: str, comment_id: str, user_id: str = Depends(g
         post_ref.update({'comments_count': firestore.Increment(-1)})
 
         # Check if the user has any other comments on the same post
-        user_comments_on_post = list(post_ref.collection('comments').where('userId', '==', user_id).stream())
+        user_comments_on_post = List(post_ref.collection('comments').where('userId', '==', user_id).stream())
 
         if not any(user_comments_on_post):
             # If no other comments by the user, remove the post from the user's commentedPosts subcollection
